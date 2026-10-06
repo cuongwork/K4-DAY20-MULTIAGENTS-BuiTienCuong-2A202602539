@@ -1,0 +1,3 @@
+PHASE6_QA_OK: independent Fraction statistics; 18 new runs; original hypotheses/results/skills/source retained; report matches artifacts
+NOISE_ANALYSIS_OK: 27 records, 0 flagged runs; original results and skills unchanged
+checked 6 runs of skill conditions: OK

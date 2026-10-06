@@ -1,0 +1,59 @@
+{
+  "conditions": {
+    "baseline": {
+      "total_tokens": 228631,
+      "mean_seconds": 20.45,
+      "mean_tokens": 38105.166666666664,
+      "roles": {
+        "learn": {
+          "mean_score": 0.44537037037037036,
+          "mean_tokens": 41154,
+          "mean_seconds": 21.733333333333334
+        },
+        "eval": {
+          "mean_score": 0.4003367003367003,
+          "mean_tokens": 35056.333333333336,
+          "mean_seconds": 19.166666666666668
+        }
+      }
+    },
+    "subagents": {
+      "total_tokens": 403613,
+      "mean_seconds": 29.75,
+      "mean_tokens": 67268.83333333333,
+      "roles": {
+        "learn": {
+          "mean_score": 0.3333333333333333,
+          "mean_tokens": 69773.33333333333,
+          "mean_seconds": 37.96666666666667
+        },
+        "eval": {
+          "mean_score": 0.32626262626262625,
+          "mean_tokens": 64764.333333333336,
+          "mean_seconds": 21.533333333333335
+        }
+      }
+    },
+    "skills-auto": {
+      "total_tokens": 306433,
+      "mean_seconds": 18.75,
+      "mean_tokens": 51072.166666666664,
+      "roles": {
+        "learn": {
+          "mean_score": 0.44537037037037036,
+          "mean_tokens": 42786.333333333336,
+          "mean_seconds": 18.866666666666667
+        },
+        "eval": {
+          "mean_score": 0.4003367003367003,
+          "mean_tokens": 59358,
+          "mean_seconds": 18.633333333333333
+        }
+      }
+    }
+  },
+  "official_runs": 18,
+  "development_runs": 3,
+  "total_runner_tokens_including_development": 1113879,
+  "freeze_verification": "checked 6 runs of skill conditions: OK"
+}

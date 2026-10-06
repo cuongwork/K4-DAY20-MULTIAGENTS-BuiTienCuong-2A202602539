@@ -1,28 +1,25 @@
 # Báo cáo Lab: Self evolving Agentic
 
-Báo cáo trình bày kết quả thực hiện theo trình tự trong `GUIDE.md`. Tại thời điểm cập nhật ngày 06/10/2026, Phần 0–3 đã hoàn thành. Có chín lần chạy trên tập học thuộc ba điều kiện; Phần 4, giả thuyết và đóng băng skill chưa thực hiện.
+Bài thực hành khảo sát chất lượng và chi phí của ba cấu hình tác tử: baseline, subagents và skills-auto. Tôi thực hiện cá nhân theo `GUIDE.md`, bao gồm thí nghiệm chính thức và mở rộng 6e nhằm đo biến động giữa các lần chạy.
 
 ## 1. Thông tin nhóm và cấu hình
 
-Thực hiện cá nhân.
-
 | Họ tên | Mã sinh viên | Phần đóng góp |
 |---|---|---|
-| Bùi Tiến Cường | 2A202602539 | Toàn bộ các phần triển khai, thí nghiệm, phân tích và báo cáo trong phạm vi bài thực hành. |
+| Bùi Tiến Cường | 2A202602539 | Toàn bộ triển khai, thực nghiệm, phân tích và báo cáo. |
 
 | Thành phần | Cấu hình |
 |---|---|
-| Mô hình | `gpt-4.1-mini` |
-| Endpoint | `https://api.openai.com/v1` |
-| Nhiệt độ | `LAB_TEMPERATURE=0` |
-| Deep Agents | `0.7.21` |
-| Môi trường kiểm tra trên Windows | Python `3.11.9`, môi trường ảo `.venv` |
-| Môi trường thực thi Linux | Docker, image `lab-deepagents:latest`, Python `3.12.15` |
-| Giới hạn đệ quy | 60 |
-| Số lần chạy tác vụ | 9 lần trên tập học; tổng 507.984 token của runner; curator gọi một lần, token chưa được đo; ngân sách tổng chưa xác định |
-| Tag `freeze` | Chưa tạo |
+| Mô hình | `gpt-4.1-mini`, endpoint `https://api.openai.com/v1` |
+| Tham số | Nhiệt độ 0; `recursion_limit=60` |
+| Thư viện và môi trường | Deep Agents 0.7.21; Windows/Python 3.11.9; thực nghiệm trong Docker Linux/Python 3.12.15 |
+| Image | `lab-deepagents:latest` |
+| Số lần chạy | 18 chính thức, 3 phát triển trước đóng băng, 18 mở rộng |
+| Chi phí | 938.677 token chính thức; 937.151 token mở rộng; tổng runner 2.051.030 token, chưa gồm curator và kiểm tra kết nối; chưa xác định ngân sách tiền |
+| Commit giả thuyết | `e38b9396ec6e76ff2622ddf5bc466033b08d31dc` |
+| Tag `freeze` | `809f4c69ad5d7befbfa0a54484f29968cde97d9d`, 06/10/2026 lúc 17:12:21 UTC+7 |
 
-Image thực thi tác tử được dựng từ `Dockerfile` của kho mã nguồn. Kiểm tra Git/đóng băng sử dụng image dẫn xuất `lab-deepagents-verify` từ `report/Dockerfile.verify`; chỉ bổ sung Git, không thay đổi môi trường thực thi các lần chạy tác tử. Khóa API được lưu trong `.env`, thuộc danh sách loại trừ của Git.
+Các hàm TODO trong bốn mô-đun được triển khai theo hướng dẫn; tệp và hằng số được bảo vệ giữ nguyên. Khóa API lưu trong `.env`, không đưa vào Git hoặc môi trường shell của tác tử. Lần kiểm thử gần nhất đạt 29/29 test trong 8,12 giây.
 
 ## 2. Giả thuyết (Phần 4.0)
 
@@ -32,60 +29,17 @@ Các giả thuyết dưới đây được lập sau Phần 3, trước khi ch�
 - H2 (skills-auto so với baseline): Dự đoán skills-auto không cải thiện điểm đánh giá trung bình so với baseline; baseline được dự đoán là điều kiện tốt nhất. Hai skill tập trung miền code, chưa bao phủ quy ước data/logs và không được đọc trong cả ba lần chạy học; điểm học skills-auto đạt 41,20%, thấp hơn baseline. Nếu skill được đọc ở tập đánh giá, lợi ích dự kiến tập trung ở quy ước type hint chứ không bao phủ mọi check mới.
 - H3 (tác vụ học so với tác vụ đánh giá): Dự đoán điểm trung bình đánh giá của skills-auto thấp hơn điểm học sau đóng băng, và hiệu quả học không chuyển đầy đủ sang dữ liệu mới. GUIDE nêu tác vụ đánh giá thêm quy ước mới; skill hiện có phạm vi hẹp. Chênh lệch giữa lần học trước và sau đóng băng của cùng bộ skill sẽ được dùng làm dấu hiệu nhiễu, không diễn giải toàn bộ thành hiệu quả học.
 
-## 3. Cài đặt và làm quen Deep Agents (Phần 0)
+## 3. Làm quen Deep Agents (Phần 0.3)
 
-### 3.1. Cài đặt
+Quan sát từ `scripts/tour.py` sử dụng mô hình giả:
 
-Môi trường ảo và các thư viện đã được thiết lập. Cấu hình mô hình được khai báo theo Option 1 của `.env.example`. Tệp báo cáo được khởi tạo từ `REPORT_TEMPLATE.md`; môi trường Linux được chuẩn bị bằng Docker để đáp ứng yêu cầu shell `/bin/sh`.
-
-### 3.2. Kiểm tra môi trường
-
-| Kiểm tra | Kết quả |
-|---|---|
-| `tests/test_01_provided.py` trên Windows, sử dụng thư mục tạm riêng | 12 passed; 4,46 giây |
-| Dựng image bằng `docker build -t lab-deepagents .` | Thành công, mã thoát 0 |
-| `tests/test_01_provided.py` trong container Linux | 12 passed; 4,45 giây |
-| Thực thi `/bin/sh` trong container | Trả về `SHELL_OK` |
-| Kết nối OpenAI trên máy chủ | Trả về `OK` |
-| Kết nối OpenAI trong container | Trả về `OK` |
-
-Lần kiểm tra thủ công ban đầu trên Windows ghi nhận 9 test đạt và 3 lỗi thiết lập do không có quyền truy cập thư mục `pytest-of-Admin`. Việc chỉ định thư mục tạm riêng bằng `--basetemp` khắc phục lỗi này. Kiểm tra API trong sandbox gặp `WinError 10013`; kiểm tra ngoài sandbox thành công, cho thấy hạn chế truy cập mạng của phiên chạy là nguyên nhân trực tiếp.
-
-Hai yêu cầu kiểm tra API thành công sử dụng cùng nội dung `Reply with OK`. Đây là kiểm tra kết nối, không được tính là lần chạy tác vụ thí nghiệm. Các kết quả trên xác nhận môi trường đáp ứng yêu cầu của Phần 0.
-
-### 3.3. Quan sát tác tử mặc định
-
-Chương trình `scripts/tour.py` sử dụng mô hình giả, chạy thành công và không tiêu thụ token API.
-
-1. Tác tử có chín công cụ: `ls`, `read_file`, `write_file`, `edit_file`, `delete`, `glob`, `grep`, `execute` và `task`. Công cụ `execute` cho phép thực thi lệnh shell.
-2. Công cụ `task` khởi tạo subagent tạm thời. Subagent `general-purpose` hỗ trợ nghiên cứu, tìm kiếm và xử lý tác vụ nhiều bước, với cùng tập công cụ của tác tử chính. Mỗi lần gọi mặc định không lưu trạng thái; subagent chỉ nhận prompt được giao. Vì vậy, lời giao việc cần chứa đầy đủ yêu cầu và ngữ cảnh cần thiết.
-3. System prompt mặc định là chuỗi rỗng. Mô tả `task` quy định: “The agent's report is not shown to the user; relay a summary yourself.” Mô tả `execute` hướng dẫn: “Quote paths containing spaces (e.g. cd \"/path/with spaces\").” Các mô tả công cụ cung cấp hướng dẫn hành vi dù system prompt mặc định rỗng.
-
-### 3.4. Xây dựng backend và tác tử (bước 1.2)
-
-Hàm `make_backend` sử dụng `LocalShellBackend` với thư mục gốc là sandbox, đường dẫn ảo và thời gian chờ 120 giây. Shell không kế thừa môi trường tiến trình cha; chỉ nhận `PATH`, `HOME` và `PYTHONDONTWRITEBYTECODE`. `PATH` chứa thư mục Python đang chạy cùng các thư mục hệ thống Linux, giúp thực thi Python mà không truyền khóa API vào shell.
-
-Hàm `build_agent` hỗ trợ hai chế độ `single` và `subagents`; chế độ không hợp lệ gây `ValueError`. Chế độ `subagents` bổ sung các vai trò đã định nghĩa, nối `PATHS_NOTE` vào prompt từng subagent và thêm `SUBAGENTS_NOTE` vào prompt chính. Khi `use_skills=True`, tác tử nhận đường dẫn `/skills/` và `SKILLS_NOTE`. Mô hình giả có thể được truyền trực tiếp để kiểm tra ngoại tuyến.
-
-Trước triển khai, `test_02_agent.py` ghi nhận 8 test thất bại và 1 test đạt do các hàm TODO. Sau triển khai, toàn bộ 9 test đạt trong 2,30 giây trên container Linux, bao gồm kiểm tra bảo vệ khóa API, thống nhất đường dẫn, công cụ, chế độ, skill và prompt của subagent. Bốn hằng số prompt được đối chiếu với bản gốc bằng cấu trúc cú pháp và không thay đổi. Không sử dụng API trong các kiểm tra này.
-
-### 3.5. Chạy tác vụ và ghi kết quả (bước 1.3)
-
-Hàm `run_task` tạo thư mục tạm ngoài kho mã nguồn, sao chép workspace và skill tương ứng với điều kiện, rồi dựng tác tử. Sandbox được xóa khi kết thúc bằng `TemporaryDirectory`. Bản ghi gồm thời điểm UTC, mã băm skill trước chạy, thời gian thực thi, token, số lần gọi công cụ, thông điệp cuối và kết quả chấm điểm; được lưu dưới dạng `run.json` cùng vết `trace.md`.
-
-Token được cộng từ `UsageMetadataCallbackHandler`, bao gồm các lần gọi mô hình của subagent. Số lần gọi công cụ và subagent chỉ được đếm trên luồng chính; số skill được đọc là số tên thư mục khác nhau sau `skills/`. Việc sửa skill được phát hiện bằng đối chiếu mã băm trước và sau chạy. Ngoại lệ từ `agent.invoke` được ghi vào `error`, sau đó workspace vẫn được chấm điểm. Theo cách cài đặt tối thiểu trong pseudo-code, khi có ngoại lệ, danh sách message rỗng nên vết rỗng và số lần gọi công cụ bằng 0; hạn chế này cần được lưu ý khi phân tích lần chạy lỗi.
-
-Trước triển khai, `test_03_runner.py` ghi nhận 1 test đạt và 5 test thất bại do TODO. Sau triển khai, 6/6 test đạt trong 2,79 giây. Kiểm tra kết hợp `test_01`, `test_02` và `test_03` đạt 27/27 test trong 9,15 giây trên Linux. Các test xác nhận bản ghi đầy đủ, workspace gốc không bị sửa, lỗi được ghi nhận, thay đổi skill được phát hiện và số đếm phù hợp. Các hàm có sẵn `render_trace`, `main` và cấu hình `CONDITIONS` được đối chiếu với bản gốc và giữ nguyên.
-
-### 3.6. Chạy thử mô hình thật và xác nhận checkpoint Phần 1
-
-Lần chạy `baseline data-learn` bắt đầu lúc `2026-10-06T05:35:36.920957+00:00`, sử dụng giới hạn đệ quy 60. Kết quả đạt 5/8 check, tương ứng điểm 0,625; thời gian 38,7 giây; 76.588 token đầu vào và 2.377 token đầu ra, tổng cộng 78.965 token. Luồng chính có 12 lần gọi công cụ, không giao việc cho subagent và không đọc skill. Bản ghi không có lỗi kết thúc (`error=null`) và không phát hiện thay đổi skill (`skills_modified=false`).
-
-Hai tệp `results/baseline/data-learn/run.json` và `trace.md` đã được kiểm tra; các check thất bại có phản hồi chi tiết. Workspace nguồn trong `tasks/` không thay đổi. Lần chạy này được sử dụng trực tiếp trong Phần 2, theo yêu cầu không chạy lại `data-learn` chỉ để xác nhận đường cơ sở.
+1. Chín công cụ gồm `ls`, `read_file`, `write_file`, `edit_file`, `delete`, `glob`, `grep`, `execute`, `task`; `execute` thực thi lệnh shell.
+2. `task` tạo subagent tạm thời. `general-purpose` hỗ trợ công việc nhiều bước bằng cùng tập công cụ; mặc định chỉ nhận prompt giao việc, không nhận toàn bộ lịch sử tác tử chính. Vì vậy, lời giao việc cần đủ đặc tả và đường dẫn.
+3. System prompt mặc định rỗng, nhưng mô tả công cụ vẫn hướng dẫn hành vi: `task` yêu cầu “The agent's report is not shown to the user; relay a summary yourself.”; `execute` yêu cầu “Quote paths containing spaces (e.g. cd "/path/with spaces").”.
 
 ## 4. Đường cơ sở và phân loại lỗi (Phần 2.2)
 
-Ba tác vụ học được chạy dưới điều kiện `baseline`; kết quả `data-learn` từ Phần 1 được giữ nguyên. Bảng sau bao gồm toàn bộ 15 check thất bại, với sai lệch môi trường được tách khỏi lỗi tác tử.
+Bảng dưới liệt kê 15 check thất bại của baseline trên tập học. Nhóm E là vi phạm quy ước; D là xử lý dữ liệu/định dạng; B là thiếu kiểm chứng.
 
 | Tác vụ | Check thất bại | Nhóm | Bằng chứng từ `detail` hoặc vết |
 |---|---|---|---|
@@ -105,204 +59,163 @@ Ba tác vụ học được chạy dưới điều kiện `baseline`; kết qu�
 | `logs-learn` | `rule_sorted_errors` | E | Danh sách lỗi phải sắp theo dịch vụ rồi thời gian UTC. |
 | `logs-learn` | `rule_schema_header` | E | Thiếu `schema_version=2`, `generated_by=log-triage`. |
 
-Nhóm E chiếm 9/14 lỗi sau khi loại sai lệch môi trường, tương ứng 64,29%; năm lỗi còn lại thuộc xử lý dữ liệu hoặc định dạng (D). Vết logs có hai lần đọc log, một lần ghi JSON và không có lệnh kiểm chứng, hỗ trợ nhận định về thiếu kiểm chứng (B); tác tử không đọc `README.md`, cho thấy thiếu khảo sát đặc tả (A). Việc đọc trực tiếp rồi tổng hợp JSON không bảo đảm tính đầy đủ, chuyển đổi múi giờ và gắn traceback đúng sự kiện. Đây là phân tích từ vết và check; không suy diễn rằng mọi check thất bại là lỗi độc lập.
+Sau khi loại sai lệch môi trường, E chiếm 9/14 lỗi (64,29%); năm lỗi còn lại thuộc D. Vết logs không đọc `README.md` và không kiểm chứng JSON, cho thấy thiếu khảo sát đặc tả và xác minh đầu ra. Skill về quy ước và kiểm chứng có thể hỗ trợ, nhưng hiệu quả cần được thực nghiệm xác nhận.
 
-Bằng chứng phủ định: code đạt 6/7 check kỹ thuật và data đạt 5/5; các hàm code dùng chung và hành vi docstring được bộ chấm xác nhận. Vì vậy, không có căn cứ coi vá triệu chứng (C) là nguyên nhân phổ biến. Logs chỉ đạt 1/6 check kỹ thuật. Toàn bộ baseline đạt 12/18 check kỹ thuật và 0/9 check quy ước; chưa có bằng chứng để quy lỗi không tạo tệp cho nhóm F.
+Baseline đạt 12/18 check kỹ thuật: code 6/7, data 5/5, logs 1/6; đồng thời đạt 0/9 check quy ước. Kết quả chưa hỗ trợ nhận định vá triệu chứng hoặc báo tạo tệp không tồn tại là lỗi phổ biến.
 
-Skill tổng quát có thể hỗ trợ kiểm tra quy ước đầu ra, tính đầy đủ của tệp, xử lý log bằng script và đối chiếu kết quả trước khi kết thúc. Hiệu quả thực tế chưa được xác minh trước Phần 3–4.
-
-Sai lệch CRLF được xác định trên `tasks/code-learn/workspace/tests/test_report.py`: SHA-256 của bản checkout là `efb5e7650d4f03356e8353d209fbcfe81505ce2fd648bd558d5ada6e8b92ff19`; hash khi chuẩn hóa CRLF thành LF và hash trong Git HEAD đều là `79e05f4cc2e62a4f606d210b0b08a2cc21777245bc2f6ad244a126e9a2aee00d`, trùng giá trị bộ chấm. File có 32 chuỗi CRLF. Không sửa file hoặc điểm trong `run.json`; giữ điểm thô và ghi hạn chế này khi diễn giải.
-
-Vết data còn ghi hai lỗi đường dẫn tuyệt đối trong shell và lỗi thiếu `pytz`; tác tử tự khắc phục, sau đó cả năm check kỹ thuật đạt. Những sự kiện này làm phát sinh chi phí nhưng không được tính thêm là check thất bại cuối cùng.
+Check bảo toàn test code-learn thất bại ngay trên workspace chưa chạy tác tử do CRLF khác LF kỳ vọng. Tệp có 32 chuỗi CRLF; SHA-256 bản checkout là `efb5e7650d4f03356e8353d209fbcfe81505ce2fd648bd558d5ada6e8b92ff19`, còn bản chuẩn hóa LF và bản Git là `79e05f4cc2e62a4f606d210b0b08a2cc21777245bc2f6ad244a126e9a2aee00d`. Tôi giữ nguyên tệp và điểm thô; riêng subagents thiếu vết nội bộ nên không quy toàn bộ lỗi hash cho CRLF.
 
 ## 5. Điều kiện `subagents` (Phần 2.3)
 
-### 5.1. Thiết kế subagent (bước 1.1)
+| Vai trò | Điều kiện gọi và phạm vi |
+|---|---|
+| `explorer` | Khảo sát đặc tả trước triển khai; đọc, không sửa tệp; báo bằng chứng và trường hợp biên. |
+| `implementer` | Thực hiện thay đổi đã xác định; kiểm chứng và báo kết quả thực tế. |
+| `reviewer` | Kiểm tra độc lập sau triển khai; không sửa tệp; báo sai lệch so với yêu cầu. |
 
-Hàm `get_subagents` định nghĩa ba vai trò theo `guides/pseudocode/02_subagents.md`.
+Thiết kế phân tách khảo sát, thực hiện và kiểm tra; prompt quy định phạm vi và đường dẫn cho từng vai trò.
 
-| Subagent | Điều kiện giao việc | Phạm vi và đầu ra |
-|---|---|---|
-| `explorer` | Cần xác định đặc tả, quan hệ giữa mã nguồn hoặc định dạng dữ liệu trước khi thực hiện | Đọc tài liệu, mã và dữ liệu; không sửa tệp; báo cáo bằng chứng, trường hợp biên và đề xuất. |
-| `implementer` | Thay đổi đã xác định hoặc xử lý dữ liệu cần nhiều bước | Thực hiện trong phạm vi được giao; kiểm chứng bằng test hoặc script; báo cáo tệp đã sửa và kết quả thực tế. |
-| `reviewer` | Kết quả cần đối chiếu độc lập với yêu cầu và trường hợp biên | Không sửa tệp; kiểm tra đầu ra và báo cáo phát hiện có bằng chứng. |
+| Tác vụ | `subagent_calls` | Quan sát từ vết/kết quả |
+|---|---:|---|
+| code-learn | 1 | Giao `implementer` nhưng thiếu đặc tả/đường dẫn đầy đủ; tác tử chính không chạy lại test. Subagent báo lỗi import, thông điệp cuối vẫn khẳng định test đạt; bộ chấm ghi một lỗi test. |
+| data-learn | 1 | Khử trùng được giao theo bốn cột thay vì `order_id`; `duplicate_rows_removed=8`, kỳ vọng 7; thiếu tính lại chỉ số. |
+| logs-learn | 1 | Thiếu schema JSON và rút gọn quy tắc repeat khi giao việc; nhiều check báo `KeyError: 'errors'`. |
+| code-eval | 0 | Không giao việc; đạt 6/11. |
+| data-eval | 1 | Có giao việc; đạt 3/9. |
+| logs-eval | 1 | Có giao việc; đạt 1/10. |
 
-Phân tách khảo sát, thực hiện và kiểm tra nhằm làm rõ trách nhiệm của từng vai trò. Mỗi subagent có tên duy nhất, `description` nêu điều kiện gọi và `system_prompt` quy định phạm vi. Prompt yêu cầu phân biệt dữ kiện đã xác minh với thông tin còn thiếu do ngữ cảnh được cô lập. Không bổ sung skill cho subagent; quy ước đường dẫn sẽ được nối trong `build_agent` ở bước 1.2.
-
-Tại checkpoint bước 1.1, lệnh `pytest tests/test_02_agent.py -k subagents` ghi nhận 1 test đạt và 2 test thất bại do `build_agent` chưa triển khai. Test riêng `test_subagents_have_required_fields` trong container Linux đạt trong 0,13 giây. Sau bước 1.2, toàn bộ 9 test trong `test_02_agent.py` đạt, xác nhận cả cấu trúc và tích hợp subagent.
-
-### 5.2. Quan sát thực nghiệm (Phần 2.3)
-
-Cả ba lần chạy `subagents` đều giao việc cho `implementer` đúng một lần; `explorer`, `reviewer` và `general-purpose` không xuất hiện trong các lệnh giao việc của luồng chính. Việc phân vai đã kích hoạt giao việc, nhưng chưa kích hoạt kiểm tra độc lập bằng `reviewer`.
-
-| Tác vụ | Thông tin giao việc và kiểm chứng | Kết quả quan sát |
-|---|---|---|
-| `code-learn` | Giao sửa ba mô-đun theo docstring, cấm sửa test; không truyền đầy đủ đường dẫn `workspace/...` và nội dung đặc tả từng hàm. Tác tử chính ghi lại ba tệp từ báo cáo, không chạy lại test. | Báo cáo subagent nêu lỗi import; tác tử chính vẫn khẳng định test đạt. Bộ chấm báo `visible_suite_passes`: “1 error in 0.09s”. Chi tiết nguyên nhân import chưa thể xác minh vì vết nội bộ không được lưu. |
-| `data-learn` | Giao đủ tên chỉ số, miền thời gian và quy tắc thiếu tiền, nhưng đổi khóa khử trùng thành cả bốn cột thay vì giữ một dòng mỗi `order_id`. Tác tử chính đọc lại JSON, không tính lại chỉ số. | `duplicate_rows_removed` nhận 8 thay vì 7; bốn check kỹ thuật khác đạt. Lời giao việc sai đặc tả và không kiểm chứng độc lập là bằng chứng cho A/B, với biểu hiện D ở đầu ra. |
-| `logs-learn` | Giao lọc mức log, UTC, exception và thống kê; không truyền schema JSON mẫu, chỉ nói “specified JSON structure”; quy tắc cộng `1 + sum(N)` được rút gọn. Không đọc lại tệp hoặc chạy check. | Cấu trúc đầu ra không đạt, nhiều check báo `KeyError: 'errors'`; tác tử chính dựa vào lời báo hoàn thành của subagent. Đây là lỗi D có liên hệ với thiếu ngữ cảnh và kiểm chứng (A/B). |
-
-Ba check quy ước code và data đều không đạt. Ở logs-subagents, các check `rule_service_names`, `rule_sorted_errors` báo `KeyError: 'errors'`, nên chưa đủ bằng chứng kết luận tác tử đã áp dụng sai từng quy ước đó: sai schema gây lỗi dây chuyền. Check `rule_schema_header` xác nhận thiếu thông tin header. Không coi lời báo hoàn thành là bằng chứng tệp không tồn tại; bộ chấm chỉ xác nhận cấu trúc không đạt.
-
-Trong cả hai điều kiện, check `tests_not_modified` của code không đạt; sai lệch CRLF đã có trước tác tử. Riêng subagent code tự báo từng sửa rồi hoàn nguyên import, nhưng vết không cho thấy thao tác nội bộ. Vì vậy không thể quy toàn bộ thất bại hash của lần này cho CRLF hoặc xác nhận test cuối giữ nguyên byte; cần bảo lưu bất định thay vì kết luận tác tử vi phạm chỉ từ check đó.
-
-Token và thời gian được tổng hợp tại mục 7. Cả sáu lần chạy có `error=null`, `skills_modified=false`, `skills_read=0`. Không có kết quả tác vụ đánh giá ở giai đoạn này.
+Trên tập học, chỉ `implementer` được gọi; `explorer` và `reviewer` không được sử dụng. Token trung bình tăng từ 41.154 lên 69.773,33 (+69,54%); thời gian tăng từ 21,73 lên 37,97 giây (+74,69%). Trên đánh giá, token tăng từ 35.056,33 lên 64.764,33; thời gian từ 19,17 lên 21,53 giây. Thiếu ngữ cảnh và kiểm chứng là cơ chế khả dĩ, chưa đủ xác định nguyên nhân từng thất bại đánh giá.
 
 ## 6. Self-evolving: skill do curator sinh (Phần 3)
 
-### 6.1. Triển khai và kiểm tra (Phần 3.1)
+Curator chạy một lần từ ba bản ghi baseline học, sinh hai skill; không xóa, sửa tay hoặc chạy lại. Chỉ dữ liệu học được đưa vào prompt; skill được kiểm tra trước khi ghi. Khi không có check thất bại, curator không gọi mô hình.
 
-Hàm `curate_skills` chỉ sử dụng bản ghi `role=learn` trong điều kiện nguồn; bản ghi đánh giá được bỏ qua trước khi đọc vết. Prompt chứa tên và `detail` của check thất bại cùng tối đa 6.000 ký tự cuối của mỗi vết. Khi không có check thất bại, hàm trả danh sách rỗng và không gọi mô hình. Mô hình được gọi một lần; các khối skill được tách và kiểm tra bằng hàm có sẵn trước khi ghi, tối đa ba skill.
+| Skill | Tính tổng quát và đúng đắn | Độ dài, mô tả kích hoạt và sử dụng Phần 3.4 |
+|---|---|---|
+| `preserve-original-test-files` | Quy trình tổng quát bảo toàn test và bổ sung test mới, phù hợp ràng buộc code; không giải quyết trực tiếp CRLF. | 14 dòng, 10 dòng thân; “Use when modifying or adding tests …”; không được đọc trong ba tác vụ. |
+| `enforce-type-annotations-on-public-functions` | Hướng dẫn annotation hàm public phù hợp `rule_type_hints`; `mypy` có thể thiếu hoặc phát sinh chi phí; chưa bao phủ quy ước data/logs. | 14 dòng, 10 dòng thân; “Use when writing or updating package code …”; không được đọc trong ba tác vụ. |
 
-Hai test curator thất bại trước triển khai, sau đó đạt; kiểm tra kết hợp với các hàm có sẵn đạt 14/14 test trong 6,20 giây. Kiểm tra cuối toàn bộ bốn bộ test đạt 29/29 trong 7,54 giây. `validate_skill`, `parse_skill_blocks` và các tệp được bảo vệ giữ nguyên. Test xác nhận loại dữ liệu đánh giá khỏi prompt, đưa phản hồi học vào prompt, từ chối tên đường dẫn không an toàn và không gọi mô hình khi thiếu thất bại.
+Hai skill hợp lệ và giữ nguyên hash. Vết không có lệnh đọc `SKILL.md`; code không bổ sung annotation. Mô hình giả xác nhận skill và chỉ dẫn đọc trước đã có trong system prompt, nhưng nguyên nhân tác tử bỏ qua chưa xác định. Kết quả Phần 3.4 được giữ tại `results/skills-auto-dev/`; dữ liệu sau đóng băng nằm tại `results/skills-auto/`.
 
-### 6.2. Sinh và đánh giá skill (Phần 3.2–3.3)
+## 7. Kết quả so sánh (Phần 4.3, 4.4)
 
-Curator được chạy một lần từ ba kết quả baseline học và ghi hai skill hợp lệ. Không xóa skill, không chạy lại curator, không sửa tay nội dung. Nội dung phản hồi vẫn có check hash chịu sai lệch CRLF; prompt yêu cầu phân biệt sai lệch môi trường với hành vi sửa tệp, nhưng chỉ dẫn này không đảm bảo curator suy luận đúng.
+Giả thuyết được commit trước tag `freeze`; các lần đánh giá và skills-auto chính thức bắt đầu sau đóng băng. Công cụ kiểm tra trả `checked 6 runs of skill conditions: OK`. Cả 18 bản ghi chính thức có `error=null`, `skills_modified=false`; phản hồi chi tiết đánh giá được ẩn theo giao thức.
 
-| Skill | Tính tổng quát và đúng đắn | Độ dài và tình huống kích hoạt | Quyết định |
+Bảng nguyên bản từ `python -m lab.compare`:
+
+| Task | baseline | subagents | skills-auto |
 |---|---|---|---|
-| `preserve-original-test-files` | Quy trình bảo toàn test gốc, thêm test trong tệp mới và kiểm chứng bằng diff; phù hợp ràng buộc tác vụ code. Không chứa tên dữ liệu hoặc đáp án. Có bước sao lưu và rà soát lặp lại; không khắc phục trực tiếp sai lệch CRLF. | 14 dòng toàn tệp, 10 dòng thân; `Use when modifying or adding tests …` rõ nhưng thiên về công việc test. | Giữ nguyên; chưa có dấu hiệu hướng dẫn gây hại trong phạm vi tác vụ. |
-| `enforce-type-annotations-on-public-functions` | Yêu cầu tham số và kiểu trả về của hàm public có annotation, khớp `rule_type_hints`. Có ví dụ hàm minh họa tổng quát, không phải hàm riêng của workspace. `mypy` là kiểm chứng bổ sung, có thể phát sinh chi phí hoặc thiếu công cụ. | 14 dòng toàn tệp, 10 dòng thân; `Use when writing or updating package code …` phù hợp miền code. | Giữ nguyên; hạn chế là chưa bao phủ quy ước data/logs, regression test và changelog. |
-
-Các skill đạt `validate_skill`, không chứa định danh tác vụ đánh giá theo bộ kiểm tra. Điều này xác nhận điều kiện kỹ thuật, không chứng minh khả năng khái quát hóa. Mã băm từng tệp được lưu trong `report/phase3_skill_manifest.json` và được đối chiếu sau thí nghiệm; byte của cả hai tệp không đổi.
-
-### 6.3. Kiểm tra sử dụng trên tập học (Phần 3.4)
-
-Ba lần chạy `skills-auto` dùng cùng mã băm skill ban đầu `5a039da97ce7b0bdfaaf4000535ada94fe1db0884791e4d3bcdf68755de75b0b` và đều có `skills_modified=false`, `error=null`.
-
-| Tác vụ | Check đạt | Token | Thời gian (s) | `skills_read` | Bằng chứng và đối chiếu |
-|---|---:|---:|---:|---:|---|
-| `code-learn` | 5/10 | 97.857 | 31,0 | 0 | Không có lệnh đọc skill. Test nhìn thấy đạt sau sửa `PYTHONPATH`, nhưng check CSV quoting và ba check quy ước không đạt; `rule_type_hints` không được cải thiện. |
-| `data-learn` | 5/8 | 49.691 | 19,9 | 0 | Không đọc skill; năm check kỹ thuật đạt, ba check quy ước không đạt, giống baseline về điểm. |
-| `logs-learn` | 1/9 | 27.654 | 15,6 | 0 | Không đọc skill, viết JSON trực tiếp; cấu trúc đạt nhưng số sự kiện, UTC, exception, repeat count và quy ước chưa đạt. |
-
-Vết cả ba tác vụ không có lệnh đọc `SKILL.md`. Ở code, không thấy bổ sung type hint hoặc thực hiện checklist của skill. Việc không sửa test trong luồng chính phù hợp quy tắc sẵn có của đề, nên không thể gán cho skill chưa được đọc. Ở data/logs, mô tả hai skill thiên về code có thể không phù hợp; riêng code, nguyên nhân bỏ qua skill chưa xác định dù prompt có chỉ dẫn đọc trước. Do đó, chưa có bằng chứng skill được thực thi hoặc tạo cải thiện nhân quả.
-
-Kết quả Phần 3.4 được sao lưu nguyên trạng vào `results/skills-auto-dev/`, giữ cả bản hiện hành trong `results/skills-auto/`. Bản sao sẽ dùng để đối chiếu các lần chạy sau đóng băng ở Phần 4; hiện chưa tạo tag `freeze` hoặc chạy tác vụ đánh giá.
-
-## 7. Kết quả so sánh (sơ bộ trước đóng băng)
-
-Bảng đầu ghi kết quả Phần 2; kết quả skills-auto trước đóng băng được trình bày ở mục 6.3 và bảng tổng hợp dưới đây. Bảng chính thức ba điều kiện và sáu tác vụ sẽ được tạo ở Phần 4 từ `lab.compare`.
-
-| Tác vụ | Baseline: check đạt | Subagents: check đạt | Token baseline | Token subagents | Thời gian baseline (s) | Thời gian subagents (s) |
-|---|---:|---:|---:|---:|---:|---:|
-| `code-learn` | 6/10 | 5/10 | 23.993 | 80.620 | 12,8 | 48,2 |
-| `data-learn` | 5/8 | 4/8 | 78.965 | 75.481 | 38,7 | 34,9 |
-| `logs-learn` | 1/9 | 0/9 | 20.504 | 53.219 | 13,7 | 30,8 |
-| Điểm trung bình theo tác vụ | 44,54% | 33,33% | — | — | — | — |
-| Trung bình token/thời gian | — | — | 41.154 | 69.773,33 | 21,73 | 37,97 |
-| Tổng token | — | — | 123.462 | 209.320 | — | — |
+| code-learn | 6/10 | 5/10 | 6/10 |
+| data-learn | 5/8 | 4/8 | 5/8 |
+| logs-learn | 1/9 | 0/9 | 1/9 |
+| code-eval | 6/11 | 6/11 | 6/11 |
+| data-eval | 5/9 | 3/9 | 5/9 |
+| logs-eval | 1/10 | 1/10 | 1/10 |
+| **Mean score - learning tasks** | 0.45 | 0.33 | 0.45 |
+| **Mean score - evaluation tasks** | 0.40 | 0.33 | 0.40 |
+| **Mean tokens per run** | 38,105 | 67,268 | 51,072 |
+| **Runs that read a skill** | 0/6 | 0/6 | 0/6 |
 
 Thống kê từ `python scripts/check_breakdown.py`:
 
 ```text
 condition     role    technical  house rules  mean tokens  read a skill
+baseline      eval     12/18         0/12          35,056      0/3
 baseline      learn    12/18         0/9           41,154      0/3
+subagents     eval     10/18         0/12          64,764      0/3
 subagents     learn     9/18         0/9           69,773      0/3
-skills-auto   learn    11/18         0/9           58,400      0/3
-(evaluation rows are hidden until the git tag `freeze` exists)
+skills-auto   eval     12/18         0/12          59,358      0/3
+skills-auto   learn    12/18         0/9           42,786      0/3
 ```
 
-Công cụ thống kê làm tròn xuống token trung bình. Các điểm được giữ nguyên từ bộ chấm, gồm check hash chịu ảnh hưởng CRLF; không điều chỉnh để cải thiện kết quả.
-
-Tổng hợp ba điều kiện trên tập học, trước đóng băng:
-
-| Điều kiện | Điểm trung bình | Check kỹ thuật | Check quy ước | Token trung bình | Tổng token | Thời gian trung bình (s) |
-|---|---:|---:|---:|---:|---:|---:|
-| Baseline | 44,54% | 12/18 | 0/9 | 41.154 | 123.462 | 21,73 |
-| Subagents | 33,33% | 9/18 | 0/9 | 69.773,33 | 209.320 | 37,97 |
-| Skills-auto (Phần 3.4) | 41,20% | 11/18 | 0/9 | 58.400,67 | 175.202 | 22,17 |
+Điểm trung bình được tính theo tác vụ. Bảng công cụ làm tròn điểm và cắt phần lẻ token; mục phân tích sử dụng số chưa làm tròn.
 
 ## 8. Phân tích
 
-Trên ba tác vụ học, subagents giảm điểm trung bình 11,20 điểm phần trăm so với baseline, trong khi tăng token tổng khoảng 69,54% và thời gian trung bình khoảng 74,69%. Riêng data dùng ít token hơn 4,41% nhưng giảm một check đạt. Hai tác vụ còn lại tăng chi phí và giảm điểm. Với dữ liệu hiện tại, đa tác tử chưa thể hiện lợi ích tương xứng chi phí.
+1. **Chất lượng và giả thuyết.** Trên tập học, baseline và skills-auto cùng đạt 44,54%, subagents đạt 33,33%; trên đánh giá tương ứng 40,03%, 40,03% và 32,63%. Không điều kiện bổ sung nào cải thiện so với baseline. H1 phù hợp quan sát; H2 phù hợp dự đoán không cải thiện nhưng baseline chỉ đồng hạng tốt nhất. H3 đúng về chiều giảm 4,50 điểm phần trăm, chưa đủ chứng minh quá khớp.
 
-Vết cho thấy lời giao việc thiếu hoặc biến đổi đặc tả, cùng việc tác tử chính không kiểm tra độc lập báo cáo subagent. Các thất bại quy ước chiếm đa số trong baseline, tạo cơ sở cho curator sinh hướng dẫn về schema, quy ước và kiểm chứng. Phần 3 đã sinh hai skill nhưng không có lần đọc nào trong ba vết. Skills-auto giảm điểm trung bình 3,33 điểm phần trăm và tăng token khoảng 41,91% so với baseline; chưa thể quy chênh lệch cho nội dung skill do không có bằng chứng đọc và chỉ chạy một lần. Cả ba điều kiện đều chưa đạt check quy ước nào. Không có check cụ thể được chứng minh là cải thiện nhờ skill; `rule_type_hints` là ví dụ skill phù hợp nhưng chưa được đọc, còn quy ước data/logs nằm ngoài nội dung skill. Khả năng khái quát, quá khớp và nhiễu sau đóng băng sẽ được đánh giá ở Phần 4.
+2. **Kỹ thuật và quy ước.** Baseline/skills-auto cùng đạt 12/18 check kỹ thuật ở mỗi tập; subagents đạt 9/18 trên học và 10/18 trên đánh giá. Mỗi điều kiện đạt 0/9 check quy ước học và 0/12 check quy ước đánh giá. Chưa có bằng chứng skill hỗ trợ nhóm check hoặc quy ước mới, do phạm vi hẹp và không được đọc.
+
+3. **Sử dụng skill.** Không có check đạt nhờ skill được dữ liệu chứng minh. CSV quoting của code-learn chuyển sang đạt sau đóng băng, nhưng skill không đổi và `skills_read=0`, nên không quy cải thiện cho skill. `rule_type_hints` vẫn không đạt dù skill phù hợp, cho thấy hướng dẫn chưa được thực thi.
+
+4. **Chi phí.** Token trung bình trên sáu tác vụ là 38.105,17; 67.268,83; 51.072,17, tương ứng baseline, subagents, skills-auto. Điểm đánh giá trên mỗi 1.000 token lần lượt là 0,01142; 0,00504; 0,00674 ở thang điểm 0–1. Baseline có hiệu quả cao nhất; subagents chưa thể hiện lợi ích tương xứng chi phí trong thí nghiệm này.
+
+5. **Rò rỉ và quá khớp.** Curator chỉ nhận dữ liệu học; skill không chứa định danh đánh giá theo bộ kiểm tra và không đổi sau đóng băng. Chưa thấy dấu hiệu rò rỉ trong phạm vi kiểm tra. Điểm học cao hơn đánh giá chưa đủ kết luận quá khớp khi skill chưa được đọc và mẫu nhỏ.
+
+6. **Nhiễu.** Skills-auto trước/sau đóng băng đạt code 5/10→6/10, data 5/8→5/8, logs 1/9→1/9; điểm trung bình tăng 41,20%→44,54% (+3,33 điểm phần trăm). Cùng bộ skill nhưng kết quả thay đổi là dấu hiệu biến động giữa lần chạy, chưa phải hiệu quả học; một cặp lần chạy chưa ước lượng được phân bố nhiễu.
 
 ## 9. Hạn chế và tính hợp lệ
 
-1. Mỗi điều kiện chỉ chạy một lần trên ba tác vụ học, nên chênh lệch có thể chịu ảnh hưởng nhiễu; chưa đủ để khẳng định hiệu quả ổn định hoặc tổng quát hóa.
-2. Thí nghiệm chỉ sử dụng `gpt-4.1-mini` và các tác vụ có quy ước Acme; kết quả chưa đại diện cho mô hình hoặc miền tác vụ khác.
-3. Vết chỉ chứa luồng chính. Không quan sát trực tiếp thao tác và kiểm chứng nội bộ subagent; lời báo cáo của subagent không thay thế bằng chứng thực thi.
-4. Sai lệch CRLF của file test code làm check bảo toàn test thất bại trước khi tác tử chạy, gây nhiễu điểm thô. Kết quả được giữ nguyên và ghi rõ giới hạn diễn giải.
-5. Token được cộng đầy đủ nhưng số lần gọi công cụ chỉ đếm ở luồng chính, nên không dùng số đếm này để suy ra toàn bộ công việc subagent. Curator đã thực hiện một lần, nhưng token của lượt sinh skill chưa được đo; tác vụ đánh giá và kiểm tra đóng băng chưa thực hiện.
+1. Ba tác vụ mỗi vai trò, một lần chính thức và ba lượt đánh giá mở rộng: mẫu nhỏ, chưa đủ kiểm định khác biệt hoặc suy rộng.
+2. Một mô hình và quy ước Acme do đề thiết kế: kết quả chưa đại diện cho miền hoặc mô hình khác.
+3. Vết chỉ có luồng chính: chưa quan sát trực tiếp thao tác nội bộ subagent để xác định nguyên nhân.
+4. Sai lệch CRLF gây nhiễu check bảo toàn test code-learn; giữ nguyên checkout và điểm để thống nhất điều kiện.
+5. Không có lần đọc skill và chưa đo chi phí curator/tiền: chưa đánh giá được hiệu quả khi skill được tuân thủ hoặc tổng chi phí tài chính.
 
 ## 10. Kết luận
 
-Phần 0–3 đã hoàn thành với 29/29 test ngoại tuyến đạt, chín bản ghi tác vụ học và hai skill do curator sinh. Trên tập học, baseline đạt điểm trung bình 44,54%, skills-auto 41,20% và subagents 33,33%. Không có lần đọc skill được ghi nhận, nên chưa có bằng chứng skill tự sinh được thực thi hoặc cải thiện kết quả. Kết luận giới hạn ở các lần chạy quan sát, chịu ảnh hưởng của nhiễu và sai lệch CRLF. Bước tiếp theo là viết giả thuyết, đóng băng skill và đánh giá theo Phần 4.
+Thực nghiệm gồm 18 lần chính thức, hai skill tự sinh và 18 lần lặp bổ sung. Baseline và skills-auto cùng đạt 40,03% trên đánh giá chính thức; subagents đạt 32,63%, tương ứng trung bình 35,34% khi tính ba lượt. Baseline có hiệu quả điểm trên token cao nhất; chưa có bằng chứng skill cải thiện kết quả. Kết luận giới hạn bởi mẫu nhỏ, biến động và sai lệch CRLF. Hướng tiếp theo là đo việc đọc/tuân thủ skill, mở rộng tác vụ và chạy lặp trong môi trường LF thống nhất.
 
 ## Phụ lục
 
-Kiểm thử lại sau Phần 3: bốn bộ test đạt `29 passed in 8.19s`. Mô hình giả xác nhận hai skill và chỉ dẫn đọc trước có trong system prompt. Check bảo toàn test code thất bại ngay trên workspace chưa bị tác tử sửa, do sai lệch CRLF đã xác định. Hash skill khác giữa Windows và Linux vì cách biểu diễn đường dẫn; công cụ đóng băng cần chạy cùng môi trường Linux với runner. Image hiện chưa có Git, cần bổ sung trước Phần 4. Phát hiện, bằng chứng và phương hướng xử lý được ghi trong `report/RECHECK.md`; không sửa mã nguồn, skill hoặc kết quả chạy trong lượt kiểm tra này.
+### A. Lệnh thực hiện và tái lập
 
-Các lệnh kiểm tra chính, theo trình tự thực hiện:
-
-```powershell
-python -m pytest tests/test_01_provided.py --basetemp=<thu_muc_tam_rieng>
-python scripts/tour.py
-```
-
-Kiểm tra kết nối mô hình trên máy chủ:
-
-```powershell
-python -c "from lab.model import make_model; print(make_model().invoke('Reply with OK').content)"
-```
-
-Chuẩn bị và kiểm tra môi trường Linux:
-
-```powershell
-docker build -t lab-deepagents .
-docker run --rm --mount "type=bind,source=E:\vcode\track3\K4-DAY20-MULTIAGENTS-BuiTienCuong-2A202602539,target=/lab,readonly" lab-deepagents python -m pytest tests/test_01_provided.py
-```
-
-Kiểm tra `/bin/sh` và kết nối mô hình trong container được thực hiện bằng `docker run --rm --env-file .env lab-deepagents python -c ...`. Thử thách mở rộng chưa thực hiện.
-
-Kiểm tra bước 1.1, trước và sau triển khai:
-
-```powershell
-python -m pytest tests/test_02_agent.py -k subagents --tb=short
-docker run --rm --mount "type=bind,source=E:\vcode\track3\K4-DAY20-MULTIAGENTS-BuiTienCuong-2A202602539,target=/lab,readonly" lab-deepagents python -m pytest tests/test_02_agent.py::test_subagents_have_required_fields
-```
-
-Phạm vi sửa mã nguồn: chỉ thân hàm TODO `get_subagents` trong `src/lab/subagents.py`. Các tệp có sẵn, hằng số prompt và thư mục `tests/`, `tasks/`, `scripts/` được giữ nguyên.
-
-Bước 1.2 bổ sung các import cần thiết và triển khai hai hàm TODO `make_backend`, `build_agent` trong `src/lab/agent.py`. Lệnh sau được chạy trước và sau triển khai:
-
-```powershell
-docker run --rm --mount "type=bind,source=E:\vcode\track3\K4-DAY20-MULTIAGENTS-BuiTienCuong-2A202602539,target=/lab,readonly" lab-deepagents python -m pytest tests/test_02_agent.py --tb=short
-```
-
-Bước 1.3 bổ sung các import cần thiết và triển khai hàm TODO `run_task` trong `src/lab/runner.py`. Hai lệnh kiểm tra chính:
-
-```powershell
-docker run --rm --mount "type=bind,source=E:\vcode\track3\K4-DAY20-MULTIAGENTS-BuiTienCuong-2A202602539,target=/lab,readonly" lab-deepagents python -m pytest tests/test_03_runner.py --tb=short
-docker run --rm --mount "type=bind,source=E:\vcode\track3\K4-DAY20-MULTIAGENTS-BuiTienCuong-2A202602539,target=/lab,readonly" lab-deepagents python -m pytest tests/test_01_provided.py tests/test_02_agent.py tests/test_03_runner.py
-```
-
-Lần chạy mô hình thật của Phần 1 sử dụng repo chỉ đọc và gắn riêng thư mục kết quả có quyền ghi:
-
-```powershell
-docker run --rm --env-file .env --mount "type=bind,source=E:\vcode\track3\K4-DAY20-MULTIAGENTS-BuiTienCuong-2A202602539,target=/lab,readonly" --mount "type=bind,source=E:\vcode\track3\K4-DAY20-MULTIAGENTS-BuiTienCuong-2A202602539\results,target=/lab/results" lab-deepagents python -m lab.runner --condition baseline --tasks data-learn --recursion-limit 60
-```
-
-Phần 2 chạy tuần tự trong container với cùng các tham số mount và `--env-file .env` của Phần 1; lệnh bên trong container:
+Các lệnh chính dưới đây chạy trong container Linux theo thứ tự; baseline data-learn từ bước chạy thử được giữ lại. Runner gắn repo chỉ đọc và riêng `results` có quyền ghi; curator gắn riêng `skills/auto` để ghi skill.
 
 ```bash
+python -m pytest tests/test_01_provided.py
+python scripts/tour.py
+python -m pytest tests/test_02_agent.py
+python -m pytest tests/test_03_runner.py
+python -m lab.runner --condition baseline --tasks data-learn --recursion-limit 60
 python -m lab.runner --condition baseline --tasks code-learn logs-learn --recursion-limit 60
 python -m lab.runner --condition subagents --tasks learn --recursion-limit 60
-```
-
-Thống kê được chạy trên Windows bằng `python scripts/check_breakdown.py`. Đã kiểm tra đủ sáu cặp `run.json`/`trace.md`, tính nhất quán token, điểm và phản hồi thất bại; không sửa nguồn trong `tasks/`, `tests/`, `scripts/`. Không chạy lại baseline data, không chạy tác vụ đánh giá, không sửa skill.
-
-Phần 3 thực hiện theo thứ tự:
-
-```bash
 python -m pytest tests/test_01_provided.py tests/test_04_curator.py
 python -m lab.curator
 python -m lab.runner --condition skills-auto --tasks learn --recursion-limit 60
-python -m pytest tests/test_01_provided.py tests/test_02_agent.py tests/test_03_runner.py tests/test_04_curator.py
+python -m pytest
 ```
 
-Các lệnh chạy trong container Linux. Curator dùng `.env`, gắn repo chỉ đọc và gắn riêng `skills/auto` để ghi đầu ra. Runner dùng repo và skill chỉ đọc, gắn riêng `results` để ghi kết quả. Kết quả Phần 3.4 được sao chép sang `results/skills-auto-dev`, xác nhận từng tệp có byte giống bản gốc. Không sửa tay skill, không chạy lại curator, không chỉnh điểm hoặc phản hồi trong bản ghi.
+Sau khi sao lưu Phần 3.4, ghi giả thuyết, commit `hypotheses`, commit `freeze skills` và tạo tag `freeze`, chạy:
 
-Phần 4 giữ nguyên bản checkout và cấu hình tác tử đã dùng ở Phần 2–3 để tránh thay đổi môi trường giữa các điều kiện. Sai lệch CRLF được bảo lưu và diễn giải như hạn chế; không sửa file tác vụ hoặc điểm. Việc tạo bản làm việc LF để đo lại được dành cho thí nghiệm bổ sung.
+```bash
+python -m lab.runner --condition baseline --tasks eval --recursion-limit 60
+python -m lab.runner --condition subagents --tasks eval --recursion-limit 60
+python -m lab.runner --condition skills-auto --tasks all --recursion-limit 60
+python -m lab.compare
+python scripts/check_breakdown.py
+```
+
+Mẫu lệnh Docker từ PowerShell tại thư mục gốc repo:
+
+```powershell
+$repoPath = (Get-Location).Path
+docker build -t lab-deepagents .
+docker run --rm --env-file .env --mount "type=bind,source=$repoPath,target=/lab,readonly" --mount "type=bind,source=$repoPath\results,target=/lab/results" lab-deepagents python -m lab.runner --condition baseline --tasks data-learn --recursion-limit 60
+docker build -f report/Dockerfile.verify -t lab-deepagents-verify .
+docker run --rm -e GIT_CONFIG_COUNT=2 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/lab -e GIT_CONFIG_KEY_1=core.autocrlf -e GIT_CONFIG_VALUE_1=true --mount "type=bind,source=$repoPath,target=/lab,readonly" lab-deepagents-verify python scripts/verify_freeze.py
+```
+
+Image kiểm tra chỉ bổ sung Git, không dùng để chạy tác tử. Kiểm tra đóng băng sử dụng Linux để thống nhất biểu diễn đường dẫn khi băm skill. Cấu hình và bằng chứng được lưu trong `report/phase4_protocol.json`, `report/freeze_check.txt`, `report/phase3_skill_manifest.json`.
+
+### B. Mở rộng 6e: lặp để đo nhiễu
+
+Dùng chín lần đánh giá chính thức làm lượt 1; chạy thêm hai lượt mỗi điều kiện trên ba tác vụ (18 lần bổ sung), giữ nguyên cấu hình và chạy tuần tự. Dữ liệu mới lưu tại `results/noise/round-2/`, `round-3/`; thiết kế và lệnh tái lập nằm trong `report/phase6/protocol.json`, `report/phase6/README.md`.
+
+| Điều kiện | Trung bình (%) | Min–max trung bình lượt (%) | SD giữa lượt (điểm %) | Token/lần | Giây/lần | Lần đọc skill |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline | 40.03 | 40.03–40.03 | 0.00 | 32,609.67 | 17.21 | 0/9 |
+| subagents | 35.34 | 32.63–36.70 | 2.35 | 64,106.89 | 22.37 | 0/9 |
+| skills-auto | 40.03 | 40.03–40.03 | 0.00 | 60,470.89 | 18.80 | 0/9 |
+
+Trung bình lượt là trung bình ba tác vụ; SD là độ lệch chuẩn mẫu giữa ba lượt theo đơn vị điểm phần trăm. Min–max là khoảng quan sát, không phải khoảng tin cậy. Bảng từng tác vụ lưu tại `report/phase6/table.md`.
+
+Subagents biến động ở data (3/9, 5/9, 5/9) và logs (1/10, 0/10, 0/10). Hai check UTC của data chuyển sang đạt; logs mất check `valid_structure` ở hai lượt bổ sung. Vết cho thấy mỗi tác vụ data/logs giao `implementer` một lần, lời giao việc thay đổi và luồng chính logs không dùng `execute`; thiếu vết nội bộ nên chưa xác định quan hệ nhân quả.
+
+Khoảng cách baseline–subagents giảm từ 7,41 xuống 4,69 điểm phần trăm khi lấy trung bình ba lượt, nhưng thứ hạng không đổi. Baseline/skills-auto đạt 36/54 check kỹ thuật; subagents đạt 32/54; mỗi điều kiện đạt 0/36 check quy ước. Cả 18 lượt bổ sung không có lỗi runtime hoặc sửa skill; tất cả 27 lượt đánh giá không đọc skill. Dữ liệu chính thức và byte skill giữ nguyên, xác nhận bằng bộ tổng hợp ngoại tuyến:
+
+```powershell
+python report/phase6/analyze_noise.py
+```
+
+Ba lượt trên cùng tác vụ chỉ hỗ trợ thống kê mô tả; SD bằng 0 không chứng minh mô hình không nhiễu. Thứ tự chạy cố định và CRLF tiếp tục hạn chế diễn giải. Thí nghiệm tiếp theo cần nhiều lượt/tác vụ hơn và cân bằng thứ tự chạy.

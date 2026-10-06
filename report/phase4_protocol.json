@@ -1,0 +1,15 @@
+{
+  "hypotheses_commit": "e38b9396ec6e76ff2622ddf5bc466033b08d31dc",
+  "freeze_commit": "809f4c69ad5d7befbfa0a54484f29968cde97d9d",
+  "freeze_time": "2026-10-06T17:12:21+07:00",
+  "runner_image": "lab-deepagents:latest",
+  "verification_image": "lab-deepagents-verify:latest",
+  "git_runtime_configuration": {
+    "safe.directory": "/lab",
+    "core.autocrlf": "true"
+  },
+  "skills_sha256_linux": "5a039da97ce7b0bdfaaf4000535ada94fe1db0884791e4d3bcdf68755de75b0b",
+  "recursion_limit": 60,
+  "development_backup": "results/skills-auto-dev",
+  "environment_policy": "Keep original checkout and runner environment; preserve CRLF-related scoring limitations."
+}
