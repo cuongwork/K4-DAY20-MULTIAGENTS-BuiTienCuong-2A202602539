@@ -1,0 +1,12 @@
+{
+  "skills/auto/enforce-type-annotations-on-public-functions/SKILL.md": {
+    "sha256": "30427556bb9b995eb52832e9e025136267b6632dcd10cc6a0c425b7887bca537",
+    "lines": 14,
+    "body_lines": 10
+  },
+  "skills/auto/preserve-original-test-files/SKILL.md": {
+    "sha256": "85e7de4d924e3fa4129a617eae16b144f5fb2d967bdffa60d618a4f54a31ac74",
+    "lines": 14,
+    "body_lines": 10
+  }
+}

@@ -4,10 +4,13 @@ Pseudo-code: guides/pseudocode/04_curator.md
 Kiểm tra:    pytest tests/test_04_curator.py
 Chạy thật:   python -m lab.curator
 """
+import json
 import re
 from pathlib import Path
 
 from .tasks import eval_markers   # có sẵn: định danh của tác vụ đánh giá, tính lúc chạy
+from .tasks import ROOT
+from .model import make_model
 
 # ---- CÓ SẴN, KHÔNG SỬA: kiểm tra và tách khối skill (phần dễ sai và liên quan bảo mật) ----------------
 SAFE_NAME = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -68,7 +71,57 @@ def curate_skills(results_dir="results", source_condition="baseline", out_dir=No
     model mặc định: make_model() (lab.model).
     Trả về: danh sách đường dẫn SKILL.md đã ghi.
     """
-    raise NotImplementedError("TODO: cài đặt curate_skills (xem guides/pseudocode/04_curator.md)")
+    runs = []
+    for path in sorted((Path(results_dir) / source_condition).glob("*/run.json")):
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if record.get("role") != "learn":
+            continue
+        trace_path = path.with_name("trace.md")
+        trace = trace_path.read_text(encoding="utf-8")[-6000:] if trace_path.exists() else ""
+        failed = [
+            {"name": check["name"], "detail": check.get("detail", "")}
+            for check in record.get("checks", []) if not check["passed"]
+        ]
+        runs.append({"task": record["task"], "failed": failed, "trace": trace})
+
+    if not any(run["failed"] for run in runs):
+        print("Warning: không có check thất bại ở tác vụ học")
+        return []
+
+    prompt = (
+        "You write skills for an engineering and data-analysis agent. Below are failed "
+        "checks with reviewer feedback and execution traces from learning tasks. Find "
+        f"common process failures and write at most {max_skills} short skills that help "
+        "on NEW tasks of the same kind.\n"
+        "Rules:\n"
+        "- Generalize procedures and organizational conventions; do not include task IDs, "
+        "task-specific input filenames, function names, columns, answers, or data values.\n"
+        "- Convention-mandated output filenames, schema keys, and formatting rules may "
+        "be retained. Do not invent additional conventions.\n"
+        "- Do not infer that a file was edited solely from a failed integrity check; "
+        "verify evidence and distinguish environment issues from agent errors.\n"
+        "- Each skill needs YAML frontmatter with a lowercase hyphenated name and a "
+        "one-sentence description beginning with 'Use when'.\n"
+        "- Use at most 40 body lines of actionable, verifiable instructions per skill.\n"
+        "- Return only skill blocks in this exact format:\n"
+        "=== SKILL: <name> ===\n"
+        "---\nname: <name>\ndescription: <when to use>\n---\n"
+        "<instructions>\n=== END ===\n\n"
+        "Learning evidence:\n" + json.dumps(runs, indent=2, ensure_ascii=False)
+    )
+    reply = (model if model is not None else make_model()).invoke(prompt).content
+    output = Path(out_dir) if out_dir is not None else ROOT / "skills" / "auto"
+    written = []
+    for name, text in parse_skill_blocks(reply):
+        if len(written) >= max_skills:
+            break
+        if validate_skill(text, expected_name=name):
+            continue
+        path = output / name / "SKILL.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        written.append(path)
+    return written
 
 
 if __name__ == "__main__":
